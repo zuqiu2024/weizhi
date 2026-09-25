@@ -9,7 +9,7 @@
 // ============================================================
 
 // ⚠️ 修改这里的密码！访问 /admin 和 /api/records 时需要这个密码
-const ADMIN_PASSWORD = 'your_password_here';
+const ADMIN_PASSWORD = '521895';
 
 // KV 命名空间绑定名称（在 wrangler.toml 里配置）
 // KV_RECORDS 会自动注入
